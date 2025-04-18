@@ -1,8 +1,10 @@
 Title = "Airkoala's Blog"
+FaviconHref = "/assets/avatar_16.gif"
+Hostname = "airkoala.lol"
 
 [Author]
 Name = "Airkoala"
-AvatarHref = "https://cdn.discordapp.com/avatars/340115550208262145/a_0b38877ee0f299f375531a8954014c81.gif?size=4096"
+AvatarHref = "/assets/avatar.gif"
 Blurb = """
 Deleniti voluptatibus sint aut. Possimus consectetur numquam et. Ut ut error dolor.<br>
 
