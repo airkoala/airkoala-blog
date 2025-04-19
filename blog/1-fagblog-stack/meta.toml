@@ -1,3 +1,4 @@
-Title = "The File-Access Go Blog Stack"
-Timestamp = 2025-04-16T23:08:15+10:00
-Summary = "In this post, I explain the how and why of the decisions I made in writing the engine."
+Title = "No, you don't need to dockerise your MERN app for the cloud — The File-Access Go Blog Stack"
+ThumbnailHref = "/assets/1-fagblog-stack/hardware.jpg"
+Timestamp = 2025-04-19T18:21:50+10:00
+Summary = "In this post, I go over the decisions made in writing the engine for this blog, and details over how I chose to host the server."

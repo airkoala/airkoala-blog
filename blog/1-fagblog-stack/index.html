@@ -1,36 +1,247 @@
-intro
-motivation
-stack
-server (go)
- routing
- templates
- context
+<aside>
+	<p>
+		<em>Note to potential future employer: I am usually more serious than this in person. Please hire me :3</em>
+	</p>
+</aside>
+<aside>
+	<p>
+		<em>Content Warning: Lots of multi-level seemingly unrelated tangents are present in this article (I have ADHD
+			(probably (not actually diagnosed))). Please proceed with caution.</em>
+	</p>
+</aside>
 
-view (html css)
- timestamps
- table of content
- code block
-
-reverse proxy
-
-build system
- makefile cross compile
-
-systemd
- service
 
 <p>
-	So I bought this domain a while ago because I wanted my own personal website. Now if you know me you know that I cant just use any off-the-shelf solution. I write my own tools. That was the starting point for this blog.
+	The vision for this website was to have a simple static blog that has a text based document vibe to it and matches
+	<a href="https://github.com/airkoala/dotfiles/">my desktop</a> in terms of theming and colour scheme. I also want
+	the content and configuration to be entirely done by editing documents on the filesystem. This way I wouldn't need
+	to fuck around with databases and can simply put the entire site on version control.
 </p>
 <p>
-	At first, I wanted to write a markdown to HTML static site generator in rust. But then I thought about it, why should I translate from one human-readable markup language (markdown) to yet another markup language that is also human-readable (HTML). Yeah sure HTML style tags are kinda annoying to write but it's really not all that bad. Instead of writing <code>**bold text**</code>, is it really that much harder to write <code>&lt;b&gt;bold text&lt;/b&gt;</code>?
+	At first, I wanted to write a Markdown to HTML static site generator in rust. But then I thought about it, why
+	should I translate from one human-readable markup language (Markdown) to yet another markup language that is also
+	human-readable (HTML). Yeah sure HTML tags are kinda annoying to write but it's really not all that bad.
+	Instead of writing <code>**bold text**</code>, is it really that much harder to write
+	<code>&lt;b&gt;bold text&lt;/b&gt;</code>?
 </p>
 
 <h1>The FAGBlog Stack</h1>
+<p>
+	The server for this website is written in Go using its default <code>net/html</code> package which is actually
+	really feature packed and is more than enough for something simple like this. The frontend is written in vanilla
+	HTML and CSS with minimal client side scripting. The server is then deployed on a $15 Raspberry Pi (the original
+	Zero W) under my desk and served behind an nginx reverse proxy, proxied again through Cloudflare to leverage their
+	caching services.
+</p>
 
-<h3>subh</h3>
-<h1>summary</h1>
-<h1>summary</h1>
-<h1>summary</h1>
-<h1>summary</h1>
-<h1>summary</h1>
+<p>
+	I will now attempt to walk you through my train of thought (which does multi track drifting so bear with me). The
+	ideal solution for something like this would have been to statically generate the whole site and host it on some
+	free static site host like GitHub Pages. However, since I was going to self host anyway, and since the pages are are
+	simple enough that rendering is super fast (&lt;300 µs on my pc, haven't benchmarked on the server), pregenerating
+	didn't seem worth it.
+</p>
+
+<p>
+	So the decision was made. The site would be server-side rendered. Since I decided to use HTML for writing the
+	articles, rendering is as simple as putting in the article into some pre-defined slot in a template. Initially I did
+	not plan on having anything more complex than that - although, that changed when I decided on a table of content for
+	the blogs, more on that later - so vanilla PHP (not Laravel or anything) and Apache httpd have would unironically
+	been a very good choice (I still think this is true). However, I've been wanting to learn Go for a while and wanted
+	it on my resume, so I chose Go instead (this was actually my first time ever using Go and I really enjoyed it).
+</p>
+
+<h2>Deployment</h2>
+<p>
+	Since Go can compile to a single static binary, deployment is piss easy. For cross compilation, all I have to do is
+	set the environment variables <code>GOARCH=arm</code> and <code>GOARM=6</code> to have it target the armv6l
+	architecture on my RPi. Then I just package the binary up along with the <code>templates/</code> and
+	<code>static/</code> directories into an xzipped tarball and <code>scp</code> it over to the server. I automated this
+	along with installation in a simple Makefile so that I can just do a <code>make package GOARCH=arm GOARM=6</code> to
+	have the package ready, and then a <code>sudo make install GOARCH=arm GOARM=6</code> on the server to install.
+</p>
+<p>
+	I have a script to automate the deployment as well, but I didn't check it into version control since its kinda
+	janky. Judge for yourself:
+</p>
+
+<pre><code>
+		#!/bin/bash
+		TARGET='[redacted]'
+
+		make package GOARCH=arm GOARM=6
+		scp fagblog-linux-armv6.tar.xz $TARGET:~/
+
+		ssh $TARGET '
+			rm -rf ~/fagblog &amp;&amp;
+			mkdir -p ~/fagblog &amp;&amp;
+			tar -xf ~/fagblog-linux-armv6.tar.xz -C ~/fagblog &amp;&amp;
+			cd ~/fagblog &amp;&amp;
+			sudo make install GOARCH=arm GOARM=6 &amp;&amp;
+			sudo systemctl restart fagblog
+		'
+	</code></pre>
+
+<p>
+	If you paid attention to the deployment script you might have noticed a systemd service being restarted. That's
+	because the server runs as a systemd unit for easy reboots and log management. Systemd also allows for granular
+	control of filesystem permissions to set certain directories as readonly and whatnot. Who needs docker anyway?
+</p>
+
+<h2>Proxies and Cache</h2>
+<p>
+	Instead of caching on the application level on the server, I chose to use Cloudflare's automatic chaching services
+	instead. This is because doing it this way takes zero effort (it's enabled by default even), and I'm using
+	Cloudflare for DNS and proxying anyway.
+</p>
+
+<p>
+	Nginx as a reverse proxy handles passing requests from the publicly exposed HTTP and HTTPS ports to the internal
+	server port of 8000, and also handles SSL encryption using free certificates from <a
+		href="https://letsencrypt.org/">Let's Encrypt</a>. I mostly just followed <a
+		href="https://archive.esc.sh/blog/lets-encrypt-and-nginx-definitive-guide/">this article</a> for the config.
+</p>
+
+<h1>Content Directory Structure</h1>
+<p>
+	As you can tell from the name of the engine, both configuration and contents are accessed from the filesystem. The
+	directory structure for the contents of this website is as follows:
+</p>
+
+<pre><code class="language-plaintext">
+		/var/lib/fagblog/airkoala.lol/
+		|- meta.toml
+		|- assets/
+		| |- favicon.ico
+		| ...
+		-- blog/
+		|- fagblog-stack/
+		| |- meta.toml
+		| |- index.html
+		...
+	</code></pre>
+
+<p>
+	The root <code>meta.toml</code> contains metadata for the site itself (author name, bio, links etc), while each
+	<code>blog/*/meta.toml</code> is the metadata for the blogpost in question.
+</p>
+
+<pre><code class="language-toml">
+		# ----- site meta.toml -----
+		Title = "Airkoala's Blog"
+		FaviconHref = "/assets/favicon.ico"
+		Hostname = "airkoala.lol"
+
+		[Author]
+		Name = "Airkoala"
+		AvatarHref = "/assets/avatar.gif"
+		Blurb = "..."
+
+		[[HeaderLinks]]
+		Name = "GitHub"
+		Href = "https://github.com/airkoala"
+
+		...
+	</code></pre>
+
+<pre><code class="language-toml">
+		# ----- blog/1-fagblog-stack/meta.toml -----
+		Title = "..."
+		ThumbnailHref = "..."
+		Timestamp = ...
+		Summary = "..."
+	</code></pre>
+
+<p>
+	You can have a look at the contents in more detail in <a href="https://github.com/airkoala/airkoala-blog/">the
+		blog's repository</a> if you're a fucking nerd.
+</p>
+
+<h1>Rendering</h1>
+The pages on this site are all rendered server-side using Go's <code>html/template</code> library. There is no caching
+mechanism on the server itself and everything is re-rendered on each request, which allows for rapid iteration during
+development and writing. Since Cloudflare is doing the caching on the proxy level, I don't have to worry about the
+performance cost on production due to this (and also because I'm lazy).
+
+<h2>On writing HTML</h2>
+<p>
+	Writing simple HTML by hand is really not as hard as web devs of today act like. Moreover, there are so many <a
+		href="https://www.w3schools.com/html/html5_semantic_elements.asp">semantic elements</a> in HTML that are just
+	unused. For example, the notes at the top of this article are marked up using the <code>&lt;aside&gt;</code> tag.
+	This makes it super easy to write the CSS for it and then simply use the element rather than fucking around with CSS
+	classes like so:
+</p>
+
+<pre><code class="language-html nuke-html">
+	&lt;aside&gt;
+		&lt;p&gt;
+			&lt;em&gt;Note to potential future employer:&hellip;&lt;/em&gt;
+		&lt;/p&gt;
+	&lt;/aside&gt;
+</code></pre>
+
+<p>
+	Some other semantic elements used in this blog are <code>&lt;code&gt;</code> (only for inline, for blocks I used the
+	<a href="https://highlightjs.org/">highlight.js</a> library), <code>&lt;article&gt;</code> and
+	<code>&lt;datetime&gt;</code>.
+</p>
+
+<p>
+	Speaking of datetime, the timestamp for this blog at the top of the page is one of the only client side rendered
+	elements, the other being the code blocks.
+</p>
+
+<h2>Responsive CSS without a framework</h2>
+<p>
+	All styling for this site is done with handwritten (and vibe coded) vanilla CSS. You don't actually need a
+	responsive framework like tailwind or bootstrap if all you want is a few very simple responsive elements. Some
+	of the content have varying widths depending on screen size. This is done with basic CSS media queries:
+</p>
+
+<pre><code>
+	@media only screen and (max-width: 700px) {
+	  main {
+		max-width: 90%;
+		padding: 1rem;
+	  }
+	}
+
+	@media only screen and (max-width: 700px) {
+	  .profile {
+	    align-items: center;
+	    flex-direction: column;
+	  }
+	}
+</code></pre>
+
+<h2>The table of content</h2>
+<p>
+	This is generated by parsing the post's HTML during render using Go's <code>net/html</code> library and locating all
+	<code>&lt;h*&gt;</code> nodes. If the nodes already have an <code>id</code> property, then that is used for the
+	anchor link, otherwise a new one is generated from its content and injected.
+</p>
+
+<h1>Conclusion</h1>
+<p>
+	In conclusion, no you don't need to have a dockerised MERN app on the cloud if all you want is a simple static site.
+	I enjoyed writing this engine quite a lot actually. This was my first time using Go for anything and I can confirm
+	that the enjoyability factor is definitely not overhyped. Everything simply <em>just works</em>.
+</p>
+<p>
+	If you managed to make it through the entirety of this barely coherent article then uhh... thanks? idk what to say
+	honestly except that you have way too much time.
+</p>
+
+<img src="/assets/1-fagblog-stack/hardware.jpg" alt="A Raspberry Pi Zero W" width="75%">
+
+<!--
+view (html css)
+on semantic elements
+timestamps
+table of content
+code block
+-->
+
+<!-- 
+vim:linebreak ts=4 sw=4 sts=4
+-->
