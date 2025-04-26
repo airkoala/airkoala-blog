@@ -4,12 +4,12 @@ Hostname = "airkoala.lol"
 
 [Author]
 Name = "Airkoala"
-AvatarHref = "/assets/avatar.gif"
+AvatarHref = "/assets/avatar.png"
 Blurb = """
 Hi !
 <br>
 I'm Airkoala and welcome to my mental asylum. This is where I will post my rants and shit I guess? I don't do social
-media so consider this to be like my Xitter (formerly X) or something idk.
+media so consider this to be like my Xitter or something idk.
 <br>
 <i class="fa-brands fa-discord"></i> @airkoala
 """
